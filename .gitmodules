@@ -1,0 +1,3 @@
+[submodule "prefect-intel"]
+	path = prefect-v2
+	url = https://github.com/PrefectHQ/prefect-intel
