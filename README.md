@@ -28,10 +28,13 @@ pip install -e ./prefect
 When the `prefect` upstream changes, you need to update the submodule to have the latest code:
 
 ```bash
+git pull
 git submodule update
 ```
 
 Updating the submodule will automatically update the `prefect` Python module unless you did not use an editable install.
+
+If you do not perform a `git submodule update` after running `git pull`
 
 ## Troubleshooting
 
@@ -42,6 +45,22 @@ The repository was cloned without initializing the submodule, initalize it then 
 ```bash
 git submodule update --init
 ```
+
+### `a/prefect` shows up in `git diff`
+
+When a `git pull` is performed without running `git submodule update`, the difference between the expected submodule commit and the current submodule commit will be visible in a diff.
+
+```
+diff --git a/prefect b/prefect
+index 64ce6a9..0ff5203 160000
+--- a/prefect
++++ b/prefect
+@@ -1 +1 @@
+-Subproject commit 64ce6a95a3506738feaac28322fe367a291b14ac
++Subproject commit 0ff5203651880243b032577de0f4c2bf199d860a
+```
+
+To resolve this, run `git submodule update`.
 
 ## Development
 
@@ -81,4 +100,12 @@ index 64ce6a9..0ff5203 160000
 +Subproject commit 0ff5203651880243b032577de0f4c2bf199d860a
 ```
 
-If you see this in a diff on `main` while not making changes to the `prefect` submodule, you should ensure that the `prefect` submodule is on the `prefect` branch and on the latest commit.
+### Updating the `prefect` submodule
+
+The `prefect` submodule can be updated to the latest commit on the `prefect` branch by running a submodule update with the `--remote` flag.
+
+```bash
+git submodule update --remote
+```
+
+This will change the commit in the submodule to the latest commit. A commit should be made and a pull request should be created with a base of `main` to update the upstream to the latest commit.
