@@ -27,7 +27,7 @@ pip install -e ./prefect
 
 When the `prefect` upstream changes, you need to update the submodule to have the latest code:
 
-```
+```bash
 git submodule update
 ```
 
@@ -37,4 +37,8 @@ Updating the submodule will automatically update the `prefect` Python module unl
 
 ### The `prefect` folder is empty
 
-The repository was cloned without initializing the submodule, run `git submodule update --init`.
+The repository was cloned without initializing the submodule, initalize it then follow the package installation instructions:
+
+```bash
+git submodule update --init
+```
