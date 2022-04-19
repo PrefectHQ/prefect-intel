@@ -1,3 +1,4 @@
-[submodule "prefect-intel"]
+[submodule "prefect"]
 	path = prefect
 	url = https://github.com/PrefectHQ/prefect-intel
+	branch = prefect
