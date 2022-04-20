@@ -27,7 +27,7 @@ pip install -e ./prefect
 
 ### Updating the prefect submodule
 
-When the `prefect` upstream changes, you need to update the submodule to have the latest code:
+When the `prefect` upstream that the `main` branch requires is updated, you need to update the submodule to have the latest code:
 
 ```bash
 git pull
@@ -36,7 +36,7 @@ git submodule update
 
 Updating the submodule will automatically update the `prefect` Python module unless you did not use an editable install.
 
-If you do not perform a `git submodule update` after running `git pull`
+If you do not perform a `git submodule update` after running `git pull`, the module will not be updated.
 
 ## Troubleshooting
 
