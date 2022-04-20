@@ -1,5 +1,7 @@
 # prefect-intel
 
+View major objectives on the [milestones page](https://github.com/PrefectHQ/prefect-intel/milestones).
+
 
 ## Installation
 
