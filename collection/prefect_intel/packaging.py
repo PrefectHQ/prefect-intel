@@ -2,17 +2,20 @@ import inspect
 import shutil
 import sys
 import warnings
+import json
+import subprocess
+import os
 from functools import partial
 from pathlib import Path
 from types import FunctionType
-from typing import Any, List, Literal, Optional, Tuple
+from typing import Any, List, Literal, Optional, Tuple, Dict
 
 import cloudpickle
 from packaging.version import Version
 from pydantic import BaseModel
 
 from prefect.utilities.collections import AutoEnum
-from prefect.flow_runners import python_version_micro
+from prefect.flow_runners import python_version_minor
 
 
 class PickleProtocol(AutoEnum):
@@ -26,6 +29,8 @@ class PyEnvironment(BaseModel):
     """
     Description of a Python runtime environment.
     """
+    # TODO: Consider making this class abstract and moving bare implementation to a
+    #       separate class
 
     typename: Literal["bare"] = "bare"
     python_version: str
@@ -36,8 +41,8 @@ class PyEnvironment(BaseModel):
         Returns a boolean indicating if the currently active Python is running in the
         described environment.
         """
-        # TODO: Check for requirements as well?
-        return python_version_micro() == self.python_version
+        # TODO: Check for requirements as well
+        return python_version_minor() == self.python_version
 
     def is_available_on_machine(self) -> bool:
         """
@@ -46,24 +51,106 @@ class PyEnvironment(BaseModel):
         """
         if self.is_active():
             return True
-        # TODO: Check for requirements as well?
+        # TODO: Check for requirements as well
         return shutil.which(f"python{self.python_version}") is not None
+
+    def python_command(self) -> List[str]:
+        """
+        Return a command that can be used to run the environment's `python` executable.
+        """
+        return [f"python{self.python_version}"]
+
+    def python_variables() -> Dict[str, str]:
+        """
+        Return environment variables needed to run the environment's `python` executable
+        in a new process.
+        """
+        return os.environ.copy()
 
 
 class CondaEnvironment(PyEnvironment):
     typename: Literal["conda"] = "conda"
-    name: str
+    name: str = None
+    path: Path = None
     conda_requirements: List[str]
 
-    # TODO: Implement active/available checks
+    def is_active(self) -> bool:
+        # TODO: Consider a more robust implementation that uses a subprocess call to
+        #       `conda info --json`. The current implementation is much faster, though.
+        if self.name:
+            return sys.executable.endswith("{self.name}/bin/python")
+        elif self.path:
+            return sys.executable == str(self._resolved_path() / "bin" / "python")
+        else:
+            raise ValueError("Either `name` or `path` must be set.")
+
+    def is_available_on_machine(self) -> bool:
+        try:
+            output = subprocess.check_output(["conda", "env", "list", "--json"])
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                "Failed to check for conda environments on machine."
+            ) from exc
+
+        env_paths = json.loads(output)["envs"]
+
+        if self.name:
+            env_names = {path.split(os.pathsep)[-1] for path in env_paths}
+            return self.name in env_names
+        elif self.path:
+            return str(self._resolved_path()) in env_paths
+        else:
+            raise ValueError("Either `name` or `path` must be set.")
+
+    def python_command(self) -> List[str]:
+        command = ["conda", "run"]
+        if self.path:
+            command += ["--prefix", str(self.condaenv.expanduser().resolve())]
+        elif self.name:
+            command += ["--name", self.condaenv]
+        else:
+            raise ValueError("Either `name` or `path` must be set.")
+
+        command += ["python"]
+
+    def python_variables(self) -> Dict[str, str]:
+        return os.environ.copy()
+
+    def _resolved_path(self) -> Path:
+        return self.path.expanduser().resolve()
 
 
 class VenvEnvironment(PyEnvironment):
     typename: Literal["venv"] = "venv"
-    name: str
     path: Path
 
-    # TODO: Implement active/available checks
+    def is_active(self) -> bool:
+        return sys.executable == self._executable_path()
+
+    def is_available_on_machine(self) -> bool:
+        return os.path.exists(self._executable_path())
+
+    def python_command(self) -> List[str]:
+        return [str(self._executable_path())]
+
+    def python_variables(self) -> Dict[str, str]:
+        # This reproduces the relevant behavior of virtualenv's activation script
+        # https://github.com/pypa/virtualenv/blob/main/src/virtualenv/activation/bash/activate.sh
+        env = os.environ.copy()
+
+        # Update the path to include the bin
+        env["PATH"] = str(self._resolved_path() / "bin") + os.pathsep + env["PATH"]
+
+        env.pop("PYTHONHOME", None)
+        env["VIRTUAL_ENV"] = str(self._resolved_path())
+
+        return env
+
+    def _resolved_path(self) -> Path:
+        return self.path.expanduser().resolve()
+
+    def _executable_path(self) -> Path:
+        return self._resolved_path() / "bin" / "python"
 
 
 class PyFunctionDocument(BaseModel):
@@ -109,6 +196,62 @@ def run(
         raise RuntimeError("Functions cannot yet be run in new environments.")
 
 
+def detect_conda_environment() -> Optional[CondaEnvironment]:
+    try:
+        output = subprocess.check_output(["conda", "info", "--json"])
+    except subprocess.CalledProcessError:
+        # TODO: Consider parsing the exit code and output to display information about
+        #       why detection failed
+        return None
+
+    parsed_output = json.loads(output)
+    active_path = parsed_output["active_prefix"]
+    active_name = parsed_output["active_prefix_name"]
+
+    if sys.executable != str(Path(active_path) / "bin" / "python"):
+        # this is the current conda environment, but it is not being used in this
+        # python session
+        return None
+
+    # `name` takes precedence over `path` since it across machines better
+    # TODO: Detect requirements
+    if active_name:
+        return CondaEnvironment(
+            python_version=python_version_minor(),
+            name=active_name,
+            conda_requirements=[],
+            requirements=[],
+        )
+    else:
+        return CondaEnvironment(
+            python_version=python_version_minor(),
+            path=active_path,
+            conda_requirements=[],
+            requirements=[],
+        )
+
+
+def detect_venv_environment() -> Optional[VenvEnvironment]:
+    # TODO: Implement venv detection
+    return None
+
+def detect_bare_environment() -> PyEnvironment:
+    return PyEnvironment(
+        python_version=python_version_minor(),
+        requirements=[],
+    )
+
+def detect_environment() -> PyEnvironment:
+    """
+    Detect the current environment.
+    """
+    return (
+        detect_conda_environment()
+        or detect_venv_environment()
+        or detect_bare_environment()
+    )
+
+
 def package_function(
     fn: FunctionType, pickle_protocol: PickleProtocol = None
 ) -> PyFunctionDocument:
@@ -118,10 +261,7 @@ def package_function(
     document = partial(
         PyFunctionDocument,
         function_name=fn.__name__,
-        environment=PyEnvironment(
-            python_version=python_version_micro(),
-            requirements=[],
-        ),
+        environment=detect_environment(),
     )
 
     if pickle_protocol:
