@@ -1,4 +1,4 @@
-from prefect_intel.packaging import package_function, unpackage_function
+from prefect_intel.packaging import package, unpackage
 
 
 def add(x, y):
@@ -6,15 +6,21 @@ def add(x, y):
 
 
 if __name__ == "__main__":
-    packaged = package_function(add, pickle_protocol="cloudpickle")
+    packaged = package(add, serializer_type="pickle")
     print(f"Pickle package: {packaged!r}")
-    unpackaged = unpackage_function(packaged)
+    unpackaged = unpackage(packaged)
     assert unpackaged(1, 2) == 3
 
     print()
 
-    packaged = package_function(add)
+    packaged = package(add, serializer_type="source")
     print(f"Script package: {packaged!r}")
-    assert not packaged.pickle_protocol
-    unpackaged = unpackage_function(packaged)
+    unpackaged = unpackage(packaged)
+    assert unpackaged(1, 2) == 3
+
+    print()
+
+    packaged = package(add, serializer_type="reference")
+    print(f"Reference package: {packaged!r}")
+    unpackaged = unpackage(packaged)
     assert unpackaged(1, 2) == 3

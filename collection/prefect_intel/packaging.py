@@ -1,34 +1,127 @@
 import inspect
 import shutil
 import sys
-import warnings
+import importlib
 import json
 import subprocess
+import base64
 import os
-from functools import partial
 from pathlib import Path
-from types import FunctionType
 from typing import Any, List, Literal, Optional, Tuple, Dict
 
 import cloudpickle
-from packaging.version import Version
 from pydantic import BaseModel
 
 from prefect.utilities.collections import AutoEnum
 from prefect.flow_runners import python_version_minor
 
 
-class PickleProtocol(AutoEnum):
-    cloudpickle = AutoEnum.auto()
+class SerializerType(AutoEnum):
+    pickle = AutoEnum.auto()
+    source = AutoEnum.auto()
+    reference = AutoEnum.auto()
 
 
-PICKLE_PROTOCOL_IMPLEMENTATIONS = {PickleProtocol.cloudpickle: cloudpickle}
+class PickleSerializer:
+    """
+    Serializes objects using the pickle protocol.
+
+    Wraps `cloudpickle` to encode bytes in base64 for safe transmission.
+    """
+
+    # TODO: Include the cloudpickle version for incompatibility debugging purposes
+
+    @staticmethod
+    def dumps(obj: Any) -> bytes:
+        blob = cloudpickle.dumps(obj)
+
+        return base64.encodebytes(blob)
+
+    @staticmethod
+    def loads(blob: bytes) -> Any:
+        return cloudpickle.loads(base64.decodebytes(blob))
+
+
+class SourceSerializer:
+    """
+    Serializes objects by retrieving their source code.
+
+    Creates a JSON blob with keys:
+        source: The source code
+        symbol_name: The name of the object to extract from the source code
+
+    Deserialization requires the code to run with `exec`.
+    """
+
+    @staticmethod
+    def dumps(obj: Any) -> bytes:
+        return json.dumps(
+            {
+                "source": inspect.getsource(obj),
+                "symbol_name": obj.__name__,
+            }
+        )
+
+    @staticmethod
+    def loads(blob: bytes) -> Any:
+        document = json.loads(blob)
+        if not isinstance(document, dict) or set(document.keys()) != {
+            "source",
+            "symbol_name",
+        }:
+            raise ValueError(
+                "Invalid serialized data. "
+                "Expected dictionary with keys 'source' and 'symbol_name'. "
+                f"Got: {document}"
+            )
+
+        exec_globals, exec_locals = {}, {}
+        exec(document["source"], exec_globals, exec_locals)
+        symbols = {**exec_globals, **exec_locals}
+
+        return symbols[document["symbol_name"]]
+
+
+class ReferenceSerializer:
+    """
+    Serializes objects by storing their importable path.
+    """
+
+    @staticmethod
+    def dumps(obj: Any) -> bytes:
+        return (obj.__module__ + "." + obj.__qualname__).encode()
+
+    @staticmethod
+    def loads(blob: bytes) -> Any:
+        name = blob.decode()
+
+        # Try importing it first so we support "module" or "module.sub_module"
+        try:
+            module = importlib.import_module(name)
+            return module
+        except ImportError:
+            # If no subitem was included raise the import error
+            if "." not in name:
+                raise
+
+        # Otherwise, we'll try to load it as an attribute of a module
+        mod_name, attr_name = name.rsplit(".", 1)
+        module = importlib.import_module(mod_name)
+        return getattr(module, attr_name)
+
+
+SERIALIZER_IMPLEMENTATIONS = {
+    SerializerType.source: SourceSerializer,
+    SerializerType.pickle: PickleSerializer,
+    SerializerType.reference: ReferenceSerializer,
+}
 
 
 class PyEnvironment(BaseModel):
     """
     Description of a Python runtime environment.
     """
+
     # TODO: Consider making this class abstract and moving bare implementation to a
     #       separate class
 
@@ -153,7 +246,7 @@ class VenvEnvironment(PyEnvironment):
         return self._resolved_path() / "bin" / "python"
 
 
-class PyFunctionDocument(BaseModel):
+class PyObjectDocument(BaseModel):
     """
     A serialized Python function and a description of the runtime environment it
     requires.
@@ -162,23 +255,16 @@ class PyFunctionDocument(BaseModel):
     """
 
     content: bytes
-    function_name: str
-
+    serializer: SerializerType
     environment: PyEnvironment
-
-    pickle_protocol: Optional[PickleProtocol] = None
-    pickle_version: str = None
-
-    # TODO: Consider changing the name of `pickle_protocol` as there are Python internal
-    #       pickle protocols with a different meaning
 
 
 def run(
-    __fn_document: PyFunctionDocument, *args: Any, **kwargs: Any
+    __obj_document: PyObjectDocument, *args: Any, **kwargs: Any
 ) -> Tuple[Any, BaseException]:
-    if __fn_document.environment.is_active():
+    if __obj_document.environment.is_active():
         # Run the code here since the environment is already active
-        fn = unpackage_function(__fn_document)
+        fn = unpackage(__obj_document)
 
         ret_val = ret_exc = None
         try:
@@ -188,7 +274,7 @@ def run(
 
         return (ret_val, ret_exc)
 
-    elif __fn_document.environment.is_available_on_machine():
+    elif __obj_document.environment.is_available_on_machine():
         # Run the code in the environment
         raise RuntimeError("Functions cannot yet be run in inactive environments.")
     else:
@@ -235,11 +321,13 @@ def detect_venv_environment() -> Optional[VenvEnvironment]:
     # TODO: Implement venv detection
     return None
 
+
 def detect_bare_environment() -> PyEnvironment:
     return PyEnvironment(
         python_version=python_version_minor(),
         requirements=[],
     )
+
 
 def detect_environment() -> PyEnvironment:
     """
@@ -252,57 +340,27 @@ def detect_environment() -> PyEnvironment:
     )
 
 
-def package_function(
-    fn: FunctionType, pickle_protocol: PickleProtocol = None
-) -> PyFunctionDocument:
+def package(obj: Any, serializer_type: SerializerType) -> PyObjectDocument:
+    serializer = SERIALIZER_IMPLEMENTATIONS[serializer_type]
 
-    # TODO: Detect environments other than "bare"
-
-    document = partial(
-        PyFunctionDocument,
-        function_name=fn.__name__,
+    return PyObjectDocument(
+        content=serializer.dumps(obj),
+        serializer=serializer_type,
         environment=detect_environment(),
     )
 
-    if pickle_protocol:
-        pickler = PICKLE_PROTOCOL_IMPLEMENTATIONS[pickle_protocol]
 
-        content = pickler.dumps(fn)
-
-        return document(
-            content=content,
-            pickle_protocol=pickle_protocol,
-            pickle_version=getattr(pickler, "__version__"),
-        )
-
-    else:
-        # Use `inspect` to retrieve the source code
-        return document(content=inspect.getsource(fn).encode())
+def unpackage(obj_document: PyObjectDocument) -> Any:
+    serializer = SERIALIZER_IMPLEMENTATIONS[obj_document.serializer]
+    return serializer.loads(obj_document.content)
 
 
-def unpackage_function(fn_document: PyFunctionDocument) -> FunctionType:
-    if fn_document.pickle_protocol:
-        # The content is the pickled function
-
-        pickler = PICKLE_PROTOCOL_IMPLEMENTATIONS[fn_document.pickle_protocol]
-
-        if (
-            hasattr(pickler, "__version__")
-            and pickler.__version__ != fn_document.pickle_version
-        ):
-            # TODO: Improve warning
-            warnings.warn("Incompatible pickle version.")
-
-        function = pickler.loads(fn_document.content)
-        assert function.__name__ == fn_document.function_name
-
-        return function
-
-    else:
-        # The content is source code and needs to be executed to extract the function
-
-        exec_globals, exec_locals = {}, {}
-        exec(fn_document.content, exec_globals, exec_locals)
-        symbols = {**exec_globals, **exec_locals}
-
-        return symbols[fn_document.function_name]
+# TODO: Determine the best pattern for healthchecks of packaged objects
+# def healthcheck(original: Any, packaged: PyObjectDocument) -> None:
+#     try:
+#         unpackaged = unpackage(packaged)
+#     except Exception as exc:
+#         ...
+#     return {
+#         "equality": original == unpackaged,
+#     }
