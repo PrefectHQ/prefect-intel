@@ -1,19 +1,24 @@
-import inspect
-import shutil
-import sys
-import importlib
-import json
-import subprocess
 import base64
+import importlib
+import inspect
+import json
 import os
+import re
+import shutil
+import subprocess
+import sys
 from pathlib import Path
-from typing import Any, List, Literal, Optional, Tuple, Dict
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import cloudpickle
+from prefect.flow_runners import python_version_minor
+from prefect.utilities.collections import AutoEnum
+from prefect.utilities.hashing import hash_objects
 from pydantic import BaseModel
 
-from prefect.utilities.collections import AutoEnum
-from prefect.flow_runners import python_version_minor
+
+def get_default_env_directory() -> Path:
+    return Path(".") / "prefect-env"
 
 
 class SerializerType(AutoEnum):
@@ -137,7 +142,7 @@ class PyEnvironment(BaseModel):
         # TODO: Check for requirements as well
         return python_version_minor() == self.python_version
 
-    def is_available_on_machine(self) -> bool:
+    def is_available(self) -> bool:
         """
         Returns a boolean indicating if the described environment is available on the
         current machine.
@@ -147,13 +152,21 @@ class PyEnvironment(BaseModel):
         # TODO: Check for requirements as well
         return shutil.which(f"python{self.python_version}") is not None
 
+    def manager_available(self) -> bool:
+        """
+        Returns a boolean indicating if the tool required for managing this environment
+        is available on the current machine.
+        """
+        # We will not install Python versions on the machine
+        return False
+
     def python_command(self) -> List[str]:
         """
         Return a command that can be used to run the environment's `python` executable.
         """
         return [f"python{self.python_version}"]
 
-    def python_variables() -> Dict[str, str]:
+    def python_variables(self) -> Dict[str, str]:
         """
         Return environment variables needed to run the environment's `python` executable
         in a new process.
@@ -166,20 +179,23 @@ class CondaEnvironment(PyEnvironment):
     name: str = None
     path: Path = None
     conda_requirements: List[str]
+    conda_executable: str = "conda"
 
     def is_active(self) -> bool:
         # TODO: Consider a more robust implementation that uses a subprocess call to
         #       `conda info --json`. The current implementation is much faster, though.
         if self.name:
-            return sys.executable.endswith("{self.name}/bin/python")
+            return sys.executable.endswith(f"{self.name}{os.sep}bin{os.sep}python")
         elif self.path:
             return sys.executable == str(self._resolved_path() / "bin" / "python")
         else:
             raise ValueError("Either `name` or `path` must be set.")
 
-    def is_available_on_machine(self) -> bool:
+    def is_available(self) -> bool:
         try:
-            output = subprocess.check_output(["conda", "env", "list", "--json"])
+            output = subprocess.check_output(
+                [self.conda_executable, "env", "list", "--json"]
+            )
         except subprocess.CalledProcessError as exc:
             raise RuntimeError(
                 "Failed to check for conda environments on machine."
@@ -188,23 +204,31 @@ class CondaEnvironment(PyEnvironment):
         env_paths = json.loads(output)["envs"]
 
         if self.name:
-            env_names = {path.split(os.pathsep)[-1] for path in env_paths}
+            env_names = {path.split(os.sep)[-1] for path in env_paths}
             return self.name in env_names
         elif self.path:
             return str(self._resolved_path()) in env_paths
         else:
             raise ValueError("Either `name` or `path` must be set.")
 
+    def manager_available(self) -> bool:
+        """
+        Returns a boolean indicating if the tool required for managing this environment
+        is available on the current machine.
+        """
+        return shutil.which(self.conda_executable) is not None
+
     def python_command(self) -> List[str]:
-        command = ["conda", "run"]
+        command = [self.conda_executable, "run"]
         if self.path:
-            command += ["--prefix", str(self.condaenv.expanduser().resolve())]
+            command += ["--prefix", str(self._resolved_path())]
         elif self.name:
-            command += ["--name", self.condaenv]
+            command += ["--name", self.name]
         else:
             raise ValueError("Either `name` or `path` must be set.")
 
         command += ["python"]
+        return command
 
     def python_variables(self) -> Dict[str, str]:
         return os.environ.copy()
@@ -220,8 +244,11 @@ class VenvEnvironment(PyEnvironment):
     def is_active(self) -> bool:
         return sys.executable == self._executable_path()
 
-    def is_available_on_machine(self) -> bool:
+    def is_available(self) -> bool:
         return os.path.exists(self._executable_path())
+
+    def manager_available(self) -> bool:
+        return True
 
     def python_command(self) -> List[str]:
         return [str(self._executable_path())]
@@ -259,54 +286,8 @@ class PyObjectDocument(BaseModel):
     environment: PyEnvironment
 
 
-def run(
-    __obj_document: PyObjectDocument, *args: Any, **kwargs: Any
-) -> Tuple[Any, BaseException]:
-    if __obj_document.environment.is_active():
-        # Run the code here since the environment is already active
-        fn = unpackage(__obj_document)
-
-        ret_val = ret_exc = None
-        try:
-            ret_val = fn(*args, **kwargs)
-        except Exception as exc:
-            ret_exc = exc
-
-        return (ret_val, ret_exc)
-
-    elif __obj_document.environment.is_available_on_machine():
-        # Run the code in the environment
-        raise RuntimeError("Functions cannot yet be run in inactive environments.")
-    else:
-        # Build the environment and run the code in it
-        raise RuntimeError("Functions cannot yet be run in new environments.")
-
-
-def detect_conda_environment() -> Optional[CondaEnvironment]:
-    try:
-        output = subprocess.check_output(["conda", "env", "export", "--json"])
-    except subprocess.CalledProcessError:
-        # TODO: Consider parsing the exit code and output to display information about
-        #       why detection failed
-        return None
-
-    parsed_output = json.loads(output)
-
-    if "error" in parsed_output:
-        raise RuntimeError(
-            f"Failed to export the current conda environment: {parsed_output['error']}"
-        )
-
-    active_path = parsed_output["prefix"]
-    active_name = parsed_output["name"]
-
-    if sys.executable != str(Path(active_path) / "bin" / "python"):
-        # this is the current conda environment, but it is not being used in this
-        # python session
-        return None
-
-    # Parse the conda environment dependencies
-    all_dependencies = parsed_output["dependencies"]
+def parse_conda_dependencies(env_export: Any) -> Tuple[List[str], List[str]]:
+    all_dependencies = env_export["dependencies"]
     conda_dependencies = []
     pip_dependencies = []
     for dependency in all_dependencies:
@@ -315,21 +296,183 @@ def detect_conda_environment() -> Optional[CondaEnvironment]:
                 pip_dependencies.extend(dependency["pip"])
         else:
             conda_dependencies.append(dependency)
+    return conda_dependencies, pip_dependencies
+
+
+def create_venv_environment(
+    *,
+    requirements: List[str],
+    python_executable: str = sys.executable,
+    path: Path = None,
+) -> VenvEnvironment:
+    """
+    Creates a venv environment with dependencies installed
+    """
+    if not shutil.which(python_executable):
+        raise ValueError(f"Executable {python_executable} is not available.")
+
+    environment_path = path or (
+        get_default_env_directory() / hash_objects(requirements, python_executable)
+    )
+    create_command = [python_executable, "-m", "venv", str(environment_path)]
+    subprocess.check_call(create_command)
+
+    # Install packages
+    subprocess.check_call(
+        [
+            str(environment_path / "bin" / "python"),
+            "-m",
+            "pip",
+            "install",
+        ]
+        + requirements
+    )
+
+    # Retrieve the Python version
+    python_version = python_version_from_executable(python_executable)
+
+    return VenvEnvironment(
+        path=environment_path, requirements=requirements, python_version=python_version
+    )
+
+
+def python_version_from_executable(executable: Path) -> str:
+    """
+    Returns the version of Python for the given Python executable.
+
+    Creates a subprocess to check the version.
+
+    Returns the version up to the minor.
+    """
+    # TODO: Consider refactoring this with a cleaner API for major/minor/micro levels
+
+    output = subprocess.check_output([executable, "--version"])
+    match = re.match(
+        r"Python (?P<major>[0-9]+)\.(?P<minor>[0-9]+)\.(?P<micro>[0-9]+)",
+        output.decode(),
+    )
+    if not match:
+        raise ValueError(f"Failed to parse python version output: {output}")
+    versions = match.groupdict()
+    return f"{versions['major']}.{versions['minor']}"
+
+
+def create_conda_environment(
+    *,
+    conda_requirements: List[str],
+    requirements: List[str],
+    python_version: str = None,
+    base_path: Path = None,
+    name: str = None,
+    conda_executable: str = "conda",
+) -> CondaEnvironment:
+    """
+    Creates a conda environment with dependencies installed.
+
+    If `name` is not given, it will not be usable by `--name`, only `--prefix`.
+    """
+    if not shutil.which(conda_executable):
+        raise RuntimeError(
+            "Executable {conda_executable!r} is not available. Is conda installed?"
+        )
+
+    create_env_command = [
+        conda_executable,
+        "create",
+        "--json",
+        "--yes",
+    ]
+
+    if not name:
+        base_path = base_path or get_default_env_directory()
+        environment_path = base_path / hash_objects(
+            requirements, python_version, conda_requirements, conda_executable
+        )
+        create_env_command.extend(["--prefix", str(environment_path)])
+    else:
+        if base_path:
+            raise ValueError("You cannot specify both 'name' and 'base_path'.")
+        create_env_command.extend(["--name", name])
+        en
+
+    if not python_version:
+        # Specify a matching python version up to `minor`
+        # We cannot match up to `micro` because it is not always available in conda
+        v = sys.version_info
+        python_version = f"{v.major}.{v.minor}"
+
+    create_env_command.append(f"python={python_version}")
+    create_env_command.extend(conda_requirements)
+
+    print(f"Creating conda environment at {environment_path}")
+    subprocess.check_call(create_env_command)
+
+    subprocess.check_call(
+        [
+            conda_executable,
+            "run",
+            *(["--prefix", str(environment_path)] if not name else ["--name", name]),
+            "pip",
+            "install",
+        ]
+        + requirements
+    )
+
+    return CondaEnvironment(
+        python_version=python_version,
+        requirements=requirements,
+        name=name,
+        path=environment_path,
+        conda_requirements=conda_requirements,
+    )
+
+
+def detect_conda_environment(
+    conda_executable: str = "conda",
+) -> Optional[CondaEnvironment]:
+    try:
+        output = subprocess.check_output([conda_executable, "env", "export", "--json"])
+    except subprocess.CalledProcessError:
+        # TODO: Consider parsing the exit code and output to display information about
+        #       why detection failed
+        return None
+
+    parsed_output = json.loads(output)
+
+    if "error" in parsed_output:
+        # TODO: Consider including a warning here. 'error' should probably never be
+        #       here without a bad exit code
+        print(
+            f"Failed to export the current conda environment: {parsed_output['error']}"
+        )
+        return None
+
+    active_path = parsed_output["prefix"]
+    active_name = parsed_output["name"]
+
+    if sys.executable != str(Path(active_path) / "bin" / "python"):
+        # This is the current conda environment, but it is not being used in this
+        # python session
+        return None
+
+    conda_requirements, pip_requirements = parse_conda_dependencies(parsed_output)
 
     # `name` takes precedence over `path` since it transports across machines better
     if active_name:
         return CondaEnvironment(
             python_version=python_version_minor(),
             name=active_name,
-            conda_requirements=conda_dependencies,
-            requirements=pip_dependencies,
+            conda_requirements=conda_requirements,
+            requirements=pip_requirements,
+            conda_executable=conda_executable,
         )
     else:
         return CondaEnvironment(
             python_version=python_version_minor(),
             path=active_path,
-            conda_requirements=conda_dependencies,
-            requirements=pip_dependencies,
+            conda_requirements=conda_requirements,
+            requirements=pip_requirements,
+            conda_executable=conda_executable,
         )
 
 
@@ -369,6 +512,34 @@ def package(obj: Any, serializer_type: SerializerType) -> PyObjectDocument:
 def unpackage(obj_document: PyObjectDocument) -> Any:
     serializer = SERIALIZER_IMPLEMENTATIONS[obj_document.serializer]
     return serializer.loads(obj_document.content)
+
+
+def run(
+    __obj_document: PyObjectDocument, *args: Any, **kwargs: Any
+) -> Tuple[Any, BaseException]:
+    if __obj_document.environment.is_active():
+        # Run the code here since the environment is already active
+        fn = unpackage(__obj_document)
+
+        ret_val = ret_exc = None
+        try:
+            ret_val = fn(*args, **kwargs)
+        except Exception as exc:
+            ret_exc = exc
+
+        return (ret_val, ret_exc)
+
+    elif __obj_document.environment.is_available():
+        # Run the code in the environment
+        raise RuntimeError("Functions cannot yet be run in inactive environments.")
+    elif __obj_document.environment.manager_available():
+        # Build the environment and run the code in it
+        raise RuntimeError("Functions cannot yet be run in new environments.")
+    else:
+        raise RuntimeError(
+            "The required environment does not exist and the tooling to create it is "
+            "not available."
+        )
 
 
 # TODO: Determine the best pattern for healthchecks of packaged objects
