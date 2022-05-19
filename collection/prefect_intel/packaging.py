@@ -284,36 +284,52 @@ def run(
 
 def detect_conda_environment() -> Optional[CondaEnvironment]:
     try:
-        output = subprocess.check_output(["conda", "info", "--json"])
+        output = subprocess.check_output(["conda", "env", "export", "--json"])
     except subprocess.CalledProcessError:
         # TODO: Consider parsing the exit code and output to display information about
         #       why detection failed
         return None
 
     parsed_output = json.loads(output)
-    active_path = parsed_output["active_prefix"]
-    active_name = parsed_output["active_prefix_name"]
+
+    if "error" in parsed_output:
+        raise RuntimeError(
+            f"Failed to export the current conda environment: {parsed_output['error']}"
+        )
+
+    active_path = parsed_output["prefix"]
+    active_name = parsed_output["name"]
 
     if sys.executable != str(Path(active_path) / "bin" / "python"):
         # this is the current conda environment, but it is not being used in this
         # python session
         return None
 
-    # `name` takes precedence over `path` since it across machines better
-    # TODO: Detect requirements
+    # Parse the conda environment dependencies
+    all_dependencies = parsed_output["dependencies"]
+    conda_dependencies = []
+    pip_dependencies = []
+    for dependency in all_dependencies:
+        if isinstance(dependency, dict):
+            if "pip" in dependency:
+                pip_dependencies.extend(dependency["pip"])
+        else:
+            conda_dependencies.append(dependency)
+
+    # `name` takes precedence over `path` since it transports across machines better
     if active_name:
         return CondaEnvironment(
             python_version=python_version_minor(),
             name=active_name,
-            conda_requirements=[],
-            requirements=[],
+            conda_requirements=conda_dependencies,
+            requirements=pip_dependencies,
         )
     else:
         return CondaEnvironment(
             python_version=python_version_minor(),
             path=active_path,
-            conda_requirements=[],
-            requirements=[],
+            conda_requirements=conda_dependencies,
+            requirements=pip_dependencies,
         )
 
 
