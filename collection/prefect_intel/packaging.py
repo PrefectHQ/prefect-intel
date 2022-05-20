@@ -1,3 +1,4 @@
+import abc
 import base64
 import importlib
 import inspect
@@ -7,14 +8,20 @@ import re
 import shutil
 import subprocess
 import sys
+import traceback
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 import cloudpickle
 from prefect.flow_runners import python_version_minor
 from prefect.utilities.collections import AutoEnum
 from prefect.utilities.hashing import hash_objects
 from pydantic import BaseModel
+
+import prefect_intel
+
+
+IS_WORKER_PROCESS = False
 
 
 def get_default_env_directory() -> Path:
@@ -122,55 +129,77 @@ SERIALIZER_IMPLEMENTATIONS = {
 }
 
 
-class PyEnvironment(BaseModel):
+class PyEnvironment(BaseModel, abc.ABC):
     """
     Description of a Python runtime environment.
     """
 
-    # TODO: Consider making this class abstract and moving bare implementation to a
-    #       separate class
+    typename: str
+    python_version: str
+    requirements: List[str]
+
+    @abc.abstractmethod
+    def is_active(self) -> bool:
+        """
+        Returns a boolean indicating if the currently active Python is running in the
+        described environment.
+        """
+
+    @abc.abstractmethod
+    def is_available(self) -> bool:
+        """
+        Returns a boolean indicating if the described environment is available on the
+        current machine.
+        """
+
+    @abc.abstractmethod
+    def manager_available(self) -> bool:
+        """
+        Returns a boolean indicating if the tool required for managing this environment
+        is available on the current machine.
+        """
+
+    @abc.abstractmethod
+    def python_command(self) -> List[str]:
+        """
+        Return a command that can be used to run the environment's `python` executable.
+        """
+
+    @abc.abstractmethod
+    def python_variables(self) -> Dict[str, str]:
+        """
+        Return environment variables needed to run the environment's `python` executable
+        in a new process.
+        """
+
+
+class BareEnvironment(BaseModel):
+    """
+    Description of a Python runtime environment without any detected isolation.
+    """
 
     typename: Literal["bare"] = "bare"
     python_version: str
     requirements: List[str]
 
     def is_active(self) -> bool:
-        """
-        Returns a boolean indicating if the currently active Python is running in the
-        described environment.
-        """
         # TODO: Check for requirements as well
         return python_version_minor() == self.python_version
 
     def is_available(self) -> bool:
-        """
-        Returns a boolean indicating if the described environment is available on the
-        current machine.
-        """
         if self.is_active():
             return True
         # TODO: Check for requirements as well
         return shutil.which(f"python{self.python_version}") is not None
 
     def manager_available(self) -> bool:
-        """
-        Returns a boolean indicating if the tool required for managing this environment
-        is available on the current machine.
-        """
         # We will not install Python versions on the machine
         return False
 
     def python_command(self) -> List[str]:
-        """
-        Return a command that can be used to run the environment's `python` executable.
-        """
         return [f"python{self.python_version}"]
 
     def python_variables(self) -> Dict[str, str]:
-        """
-        Return environment variables needed to run the environment's `python` executable
-        in a new process.
-        """
         return os.environ.copy()
 
 
@@ -242,7 +271,7 @@ class VenvEnvironment(PyEnvironment):
     path: Path
 
     def is_active(self) -> bool:
-        return sys.executable == self._executable_path()
+        return sys.executable == str(self._executable_path())
 
     def is_available(self) -> bool:
         return os.path.exists(self._executable_path())
@@ -283,7 +312,7 @@ class PyObjectDocument(BaseModel):
 
     content: bytes
     serializer: SerializerType
-    environment: PyEnvironment
+    environment: Union[CondaEnvironment, VenvEnvironment, BareEnvironment]
 
 
 def parse_conda_dependencies(env_export: Any) -> Tuple[List[str], List[str]]:
@@ -326,6 +355,8 @@ def create_venv_environment(
             "install",
         ]
         + requirements
+        # TODO: This will only work for editable installs
+        + [str(prefect_intel.__module_path__.parent)]
     )
 
     # Retrieve the Python version
@@ -393,7 +424,6 @@ def create_conda_environment(
         if base_path:
             raise ValueError("You cannot specify both 'name' and 'base_path'.")
         create_env_command.extend(["--name", name])
-        en
 
     if not python_version:
         # Specify a matching python version up to `minor`
@@ -416,6 +446,8 @@ def create_conda_environment(
             "install",
         ]
         + requirements
+        # TODO: This will only work for editable installs
+        + [str(prefect_intel.__module_path__.parent)]
     )
 
     return CondaEnvironment(
@@ -482,7 +514,7 @@ def detect_venv_environment() -> Optional[VenvEnvironment]:
 
 
 def detect_bare_environment() -> PyEnvironment:
-    return PyEnvironment(
+    return BareEnvironment(
         python_version=python_version_minor(),
         requirements=[],
     )
@@ -499,7 +531,7 @@ def detect_environment() -> PyEnvironment:
     )
 
 
-def package(obj: Any, serializer_type: SerializerType) -> PyObjectDocument:
+def package(serializer_type: SerializerType, obj: Any) -> PyObjectDocument:
     serializer = SERIALIZER_IMPLEMENTATIONS[serializer_type]
 
     return PyObjectDocument(
@@ -514,24 +546,29 @@ def unpackage(obj_document: PyObjectDocument) -> Any:
     return serializer.loads(obj_document.content)
 
 
-def run(
-    __obj_document: PyObjectDocument, *args: Any, **kwargs: Any
-) -> Tuple[Any, BaseException]:
+def run(__obj_document: PyObjectDocument, *args: Any, **kwargs: Any) -> Any:
     if __obj_document.environment.is_active():
         # Run the code here since the environment is already active
         fn = unpackage(__obj_document)
+        return fn(*args, **kwargs)
 
-        ret_val = ret_exc = None
-        try:
-            ret_val = fn(*args, **kwargs)
-        except Exception as exc:
-            ret_exc = exc
-
-        return (ret_val, ret_exc)
+    elif IS_WORKER_PROCESS:
+        # Avoid recursively entering environments
+        raise RuntimeError(
+            "Worker process did not detect the required environment. "
+            "Refusing to run document."
+        )
 
     elif __obj_document.environment.is_available():
         # Run the code in the environment
-        raise RuntimeError("Functions cannot yet be run in inactive environments.")
+        return handle_worker_response(
+            run_in_new_worker(
+                __obj_document.environment.python_command(),
+                (__obj_document.json(), args, kwargs),
+                env=__obj_document.environment.python_variables(),
+            )
+        )
+
     elif __obj_document.environment.manager_available():
         # Build the environment and run the code in it
         raise RuntimeError("Functions cannot yet be run in new environments.")
@@ -542,12 +579,108 @@ def run(
         )
 
 
-# TODO: Determine the best pattern for healthchecks of packaged objects
-# def healthcheck(original: Any, packaged: PyObjectDocument) -> None:
-#     try:
-#         unpackaged = unpackage(packaged)
-#     except Exception as exc:
-#         ...
-#     return {
-#         "equality": original == unpackaged,
-#     }
+def pickle_exception(exc: BaseException):
+    """
+    Pickles an exception _and_ its traceback into a tuple because Python will drop
+    tracebacks on pickle.
+    """
+    return cloudpickle.dumps((exc, traceback.TracebackException.from_exception(exc)))
+
+
+class PickleError(Exception):
+    """
+    Describes an error that occured during pickling of an object.
+    """
+
+    def __init__(
+        self, message: str = None, exception: BaseException = None, obj: Any = None
+    ) -> None:
+        if obj and exception:
+            generated_message = (
+                f"Pickle of type {type(obj).__name__!r} failed with exception: {exception}.\n"
+                f"Object: {obj!r}\n"
+            )
+        else:
+            generated_message = "Pickle failed. No information was included."
+
+        message = message or generated_message
+        super().__init__(message)
+
+
+def run_in_new_worker(python_command: List[str], call: Tuple, **kwargs: Any):
+    request = base64.encodebytes(cloudpickle.dumps(call))
+    command = python_command + ["-m", __name__, request]
+    return subprocess.check_output(command, **kwargs)
+
+
+def handle_worker_response(response: str):
+    try:
+        status, pickled_result = response.strip().split(b"\n", maxsplit=1)
+    except Exception as exc:
+        raise RuntimeError(f"Malformed worker response: {response}") from exc
+
+    try:
+        result = cloudpickle.loads(base64.decodebytes(pickled_result))
+    except Exception as exc:
+        raise RuntimeError(f"Malformed result payload.") from exc
+
+    if status == b"EXCEPTION":
+        result: Tuple[Exception, traceback.TracebackException]
+        exc, tb = result
+
+        # TODO: Determine how to attach the traceback so it is only printed when the
+        #       exception is uncaught by the caller
+        for line in tb.format():
+            print(line, end="")
+
+        raise exc
+
+    elif status == b"RETURN":
+        return result
+    else:
+        raise RuntimeError(f"Unknown worker status {status!r} in response: {response}")
+
+
+def handle_worker_request(request: bytes):
+    stdout = sys.stdout
+    sys.stdout = open(os.devnull, "w")
+
+    retval = exception = None
+    try:
+        document_json, args, kwargs = cloudpickle.loads(base64.decodebytes(request))
+        document = PyObjectDocument.parse_raw(document_json)
+    except BaseException as exc:
+        exception = exc
+    else:
+        try:
+            retval = run(document, *args, **kwargs)
+        except BaseException as exc:
+            exception = exc
+
+    try:
+        if exception is not None:
+            status = b"EXCEPTION"
+            result = pickle_exception(exception)
+        else:
+            status = b"RETURN"
+            result = cloudpickle.dumps(retval)
+    except BaseException as exc:
+        # Handle data that cannot be pickled
+        exception = PickleError(exception=exc, obj=exception or retval)
+        status = b"EXCEPTION"
+        result = pickle_exception(exception)
+
+    # Return the response
+    stdout.buffer.write(status)
+    stdout.buffer.write(b"\n")
+    stdout.buffer.write(base64.encodebytes(result))
+    stdout.buffer.flush()
+
+
+if __name__ == "__main__":
+    # Mark execution as a worker process to detect recursion
+    IS_WORKER_PROCESS = True
+
+    # Pass a bad input if not present so the exception will be pickled and sent back
+    # to the caller of the worker
+    handle_worker_request(sys.argv[1].encode() if len(sys.argv) > 1 else None)

@@ -10,8 +10,9 @@ setup(
     keywords="prefect",
     url="https://github.com/PrefectHQ/prefect-intel",
     long_description_content_type="text/markdown",
-    packages=find_packages(exclude=("tests")),
+    packages=find_packages(),
     python_requires=">=3.7",
+    install_requires=["prefect >= 2.0b"],
     classifiers=[
         "Natural Language :: English",
         "Intended Audience :: Developers",
