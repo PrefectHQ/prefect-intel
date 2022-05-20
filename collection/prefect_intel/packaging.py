@@ -513,7 +513,7 @@ def detect_venv_environment() -> Optional[VenvEnvironment]:
     return None
 
 
-def detect_bare_environment() -> PyEnvironment:
+def detect_bare_environment() -> BareEnvironment:
     return BareEnvironment(
         python_version=python_version_minor(),
         requirements=[],
@@ -547,6 +547,9 @@ def unpackage(obj_document: PyObjectDocument) -> Any:
 
 
 def run(__obj_document: PyObjectDocument, *args: Any, **kwargs: Any) -> Any:
+    """
+    Run a callable object in the environment it requires.
+    """
     if __obj_document.environment.is_active():
         # Run the code here since the environment is already active
         fn = unpackage(__obj_document)
@@ -579,7 +582,7 @@ def run(__obj_document: PyObjectDocument, *args: Any, **kwargs: Any) -> Any:
         )
 
 
-def pickle_exception(exc: BaseException):
+def pickle_exception(exc: BaseException) -> bytes:
     """
     Pickles an exception _and_ its traceback into a tuple because Python will drop
     tracebacks on pickle.
@@ -595,6 +598,8 @@ class PickleError(Exception):
     def __init__(
         self, message: str = None, exception: BaseException = None, obj: Any = None
     ) -> None:
+        # Workaround for deserialization just passing the 'message'
+        # TODO: Consider improving this interface
         if obj and exception:
             generated_message = (
                 f"Pickle of type {type(obj).__name__!r} failed with exception: {exception}.\n"
@@ -603,24 +608,37 @@ class PickleError(Exception):
         else:
             generated_message = "Pickle failed. No information was included."
 
-        message = message or generated_message
-        super().__init__(message)
+        super().__init__(message or generated_message)
 
 
-def run_in_new_worker(python_command: List[str], call: Tuple, **kwargs: Any):
+def run_in_new_worker(python_command: List[str], call: Tuple, **kwargs: Any) -> str:
+    """
+    Helper for `run` to run a call in a subprocess.
+
+    Returns the worker's response.
+    """
+    # TODO: The `call` argument should not be a bare tuple.
+    # TODO: We may be able to reuse documents for transport here instead of using
+    #       cloudpickle directly. We're duplicating the base64 implementation. We do
+    #       not need all the environment information though.
     request = base64.encodebytes(cloudpickle.dumps(call))
     command = python_command + ["-m", __name__, request]
     return subprocess.check_output(command, **kwargs)
 
 
-def handle_worker_response(response: str):
+def handle_worker_response(response: str) -> Any:
+    """
+    Parse the response from a worker which is composed of a status and encoded result.
+
+    Exceptions in workers will be re-raised.
+    """
     try:
-        status, pickled_result = response.strip().split(b"\n", maxsplit=1)
+        status, encoded_result = response.strip().split(b"\n", maxsplit=1)
     except Exception as exc:
         raise RuntimeError(f"Malformed worker response: {response}") from exc
 
     try:
-        result = cloudpickle.loads(base64.decodebytes(pickled_result))
+        result = cloudpickle.loads(base64.decodebytes(encoded_result))
     except Exception as exc:
         raise RuntimeError(f"Malformed result payload.") from exc
 
@@ -642,6 +660,10 @@ def handle_worker_response(response: str):
 
 
 def handle_worker_request(request: bytes):
+    """
+    Execute the given request and return its status and encoded result.
+    """
+
     stdout = sys.stdout
     sys.stdout = open(os.devnull, "w")
 
@@ -678,6 +700,8 @@ def handle_worker_request(request: bytes):
 
 
 if __name__ == "__main__":
+    """Entrypoint for worker calls"""
+
     # Mark execution as a worker process to detect recursion
     IS_WORKER_PROCESS = True
 
