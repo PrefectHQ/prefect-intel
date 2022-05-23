@@ -51,15 +51,10 @@ class Serializer(pydantic.BaseModel, Generic[D], abc.ABC):
     A serializer that can encode objects of type 'D' into bytes.
     """
 
-    # TODO: Consider allowing additional data to be sent with the serializer, making
-    #       the following methods non-static
-
-    @abc.abstractstaticmethod
-    def dumps(obj: D) -> bytes:
+    def dumps(self, obj: D) -> bytes:
         pass
 
-    @abc.abstractstaticmethod
-    def loads(blob: bytes) -> D:
+    def loads(self, blob: bytes) -> D:
         pass
 
 
