@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import pydantic
+import warnings
 from prefect.utilities.hashing import stable_hash
 from prefect_intel.packaging.abc import Serializer
 from prefect_intel.packaging.utilities import from_qualified_name, to_qualified_name
@@ -42,6 +43,8 @@ class PickleSerializer(Serializer):
                 f"Pickle library at {value!r} does not have a 'loads' method."
             )
 
+        return value
+
     @pydantic.root_validator
     def check_picklelib_version(cls, values):
         """
@@ -57,9 +60,10 @@ class PickleSerializer(Serializer):
         if not picklelib_version:
             values["picklelib_version"] = pickler_version
         elif picklelib_version != pickler_version:
-            raise ValueError(
+            warnings.warn(
                 f"Mismatched {picklelib!r} versions. Found {pickler_version} in the "
-                f"environment but {picklelib_version} was requested."
+                f"environment but {picklelib_version} was requested.",
+                RuntimeWarning,
             )
 
         return values
@@ -132,9 +136,12 @@ class FileSerializer(Serializer):
 
     # TODO: This could use a block with read-write support for persistence
     # TODO: This implementation is a draft of composing serializers and may not be
-    #       a final pattern
+    #       a final pattern. We may want to write the full `DataDocument` to a file
+    #       so that a file can be read and decoded without storing the serializer
+    #       separately — in that case, we'd implement file persistence in a higher
+    #       level type.
 
-    basepath: Path = pydantic.Field(default_factory=Path("."))
+    basepath: Path = pydantic.Field(default_factory=lambda: Path("."))
     filesystemlib: str = "builtins"
     serializer: Serializer = PickleSerializer()
 

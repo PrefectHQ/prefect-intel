@@ -1,4 +1,4 @@
-from prefect_intel.packaging.abc import PythonCallableDocument
+from prefect_intel.packaging.abc import DataDocument
 from prefect_intel.packaging.environments import create_venv_environment
 from prefect_intel.packaging.execution import run_in_environment
 from prefect_intel.packaging.serializers import ImportSerializer
@@ -11,7 +11,7 @@ if __name__ == "__main__":
 
     # Construct a document manually with a non-existant attribute
 
-    get_document = PythonCallableDocument(
+    get_document = DataDocument(
         content=b"requests.does_not_exist", serializer=ImportSerializer()
     )
 

@@ -7,7 +7,8 @@ from typing import Any, List, Tuple
 
 import cloudpickle
 import prefect_intel
-from prefect_intel.packaging.abc import PythonCallableDocument
+from prefect_intel.packaging.abc import DataDocument
+from prefect_intel.packaging.serializers import PickleSerializer
 
 
 # TODO: This pattern is not relevant if we store qualified paths on pydantic models
@@ -55,7 +56,7 @@ def run_in_new_worker(python_command: List[str], call: Tuple, **kwargs: Any) -> 
     # TODO: We may be able to reuse documents for transport here instead of using
     #       cloudpickle directly. We're duplicating the base64 implementation. We do
     #       not need all the environment information though.
-    request = base64.encodebytes(cloudpickle.dumps(call))
+    request = DataDocument.encode(call, serializer=PickleSerializer()).json()
     command = python_command + ["-m", __name__, request]
     return handle_worker_response(subprocess.check_output(command, **kwargs))
 
@@ -102,8 +103,8 @@ def handle_worker_request(request: bytes):
 
     retval = exception = None
     try:
-        document_json, args, kwargs = cloudpickle.loads(base64.decodebytes(request))
-        func = PythonCallableDocument.parse_raw(document_json).to_callable()
+        callabledoc_json, args, kwargs = DataDocument.parse_raw(request).decode()
+        func = DataDocument.parse_raw(callabledoc_json).decode()
     except BaseException as exc:
         exception = exc
     else:
@@ -124,6 +125,10 @@ def handle_worker_request(request: bytes):
         exception = PickleError(exception=exc, obj=exception or retval)
         status = b"EXCEPTION"
         result = pickle_exception(exception)
+
+    # TODO: We sent a data document to the worker but we always return a cloudpickle
+    #       that is composed piecewise. This is required for better pickling of
+    #       exceptions, but we should consider making this interaction symmetric.
 
     # Return the response
     stdout.buffer.write(status)

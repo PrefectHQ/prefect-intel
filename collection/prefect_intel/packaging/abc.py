@@ -102,22 +102,21 @@ class PythonEnvironment(pydantic.BaseModel, abc.ABC):
         """
 
 
-class PythonCallableDocument(pydantic.BaseModel):
+class DataDocument(pydantic.BaseModel, Generic[D]):
     """
-    A serialized Python object that can be called.
+    A data document contains serialized data and a full description of the serializer
+    required to deserialize the data.
     """
 
     content: bytes
     serializer: Serializer
 
-    def to_callable(self) -> Callable:
+    def decode(self) -> D:
         return self.serializer.loads(self.content)
 
     @classmethod
-    def from_callable(
-        cls, function: Callable, serializer: Serializer
-    ) -> "PythonCallableDocument":
+    def encode(cls: Type[Self], obj: D, serializer: Serializer) -> "Self[D]":
         return cls(
-            content=serializer.dumps(function),
+            content=serializer.dumps(obj),
             serializer=serializer,
         )

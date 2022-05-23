@@ -1,4 +1,4 @@
-from prefect_intel.packaging.abc import PythonCallableDocument
+from prefect_intel.packaging.abc import DataDocument
 from prefect_intel.packaging.execution import run_in_environment
 from prefect_intel.packaging.environments import detect_environment
 from prefect_intel.packaging.serializers import (
@@ -28,7 +28,7 @@ if __name__ == "__main__":
     ]:
         print()
 
-        calldoc = PythonCallableDocument.from_callable(add, serializer=serializer)
+        calldoc = DataDocument.encode(add, serializer=serializer)
         print(f"{type(serializer).__name__} calldoc: {calldoc!r}")
 
         result = run_in_environment(env, calldoc, 1, 2)
