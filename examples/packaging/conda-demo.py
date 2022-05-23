@@ -1,5 +1,7 @@
-from prefect_intel.packaging import *
-
+from prefect_intel.packaging.abc import PythonCallableDocument
+from prefect_intel.packaging.environments import create_conda_environment
+from prefect_intel.packaging import run_in_environment
+from prefect_intel.packaging.serializers import ImportSerializer
 
 if __name__ == "__main__":
     # Create a new conda environment
@@ -11,13 +13,11 @@ if __name__ == "__main__":
 
     # Construct a document manually
 
-    get_document = PyObjectDocument(
-        content=b"requests.get",
-        serializer="reference",
-        environment=conda,
+    get_document = PythonCallableDocument(
+        content=b"requests.get", serializer=ImportSerializer()
     )
 
     # Run the document in the environment
 
-    result = run(get_document, "http://google.com")
+    result = run_in_environment(conda, get_document, "http://google.com")
     print(f"Run result: {result!r}")
