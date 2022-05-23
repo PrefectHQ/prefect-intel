@@ -62,8 +62,10 @@ class PickleSerializer(Serializer):
         elif picklelib_version != pickler_version:
             warnings.warn(
                 f"Mismatched {picklelib!r} versions. Found {pickler_version} in the "
-                f"environment but {picklelib_version} was requested.",
+                f"environment but {picklelib_version} was requested. This may cause "
+                "the serializer to fail.",
                 RuntimeWarning,
+                stacklevel=3,
             )
 
         return values
