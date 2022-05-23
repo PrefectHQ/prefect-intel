@@ -6,8 +6,46 @@ from prefect_intel.packaging.utilities import from_qualified_name, to_qualified_
 from typing_extensions import Self
 
 D = TypeVar("D", bound=Any)
+M = TypeVar("M", bound=Type[pydantic.BaseModel])
 
 
+def add_deserialization_dispatch(model_cls: M) -> M:
+    """
+    Extend a Pydantic model to add a field that includes the import path for the model
+    on serialization and dynamically imports the model on deserialization. This allows
+    automatic resolution to subtypes of the decorated model.
+    """
+    model_cls.__fields__["_dispatch_import_path"] = pydantic.fields.ModelField(
+        name="_dispatch_import_path",
+        type_=str,
+        required=True,
+        class_validators=None,
+        model_config=model_cls.Config,
+    )
+
+    cls_init = model_cls.__init__
+    cls_new = model_cls.__new__
+
+    def __init__(__pydantic_self__, **data: Any) -> None:
+        data.setdefault(
+            "_dispatch_import_path", to_qualified_name(__pydantic_self__.__class__)
+        )
+        cls_init(__pydantic_self__, **data)
+
+    def __new__(cls: Type[Self], **kwargs) -> Self:
+        if "_dispatch_import_path" in kwargs:
+            subcls = from_qualified_name(kwargs["_dispatch_import_path"])
+            return cls_new(subcls)
+        else:
+            return cls_new(cls)
+
+    model_cls.__init__ = __init__
+    model_cls.__new__ = __new__
+
+    return model_cls
+
+
+@add_deserialization_dispatch
 class Serializer(pydantic.BaseModel, Generic[D], abc.ABC):
     """
     A serializer that can encode objects of type 'D' into bytes.
@@ -24,24 +62,8 @@ class Serializer(pydantic.BaseModel, Generic[D], abc.ABC):
     def loads(blob: bytes) -> D:
         pass
 
-    # Deserialization dispatch ---------------------------------------------------------
 
-    class_import_path: str
-
-    def __init__(__pydantic_self__, **data: Any) -> None:
-        data.setdefault(
-            "class_import_path", to_qualified_name(__pydantic_self__.__class__)
-        )
-        super().__init__(**data)
-
-    def __new__(cls: Type[Self], **kwargs) -> Self:
-        if "class_import_path" in kwargs:
-            subcls = from_qualified_name(kwargs["class_import_path"])
-            return super().__new__(subcls)
-        else:
-            return super().__new__(cls)
-
-
+@add_deserialization_dispatch
 class PythonEnvironment(pydantic.BaseModel, abc.ABC):
     """
     Description of a Python runtime environment.
@@ -83,23 +105,6 @@ class PythonEnvironment(pydantic.BaseModel, abc.ABC):
         Return environment variables needed to run the environment's `python` executable
         in a new process.
         """
-
-    # Deserialization dispatch ---------------------------------------------------------
-
-    class_import_path: str
-
-    def __init__(__pydantic_self__, **data: Any) -> None:
-        data.setdefault(
-            "class_import_path", to_qualified_name(__pydantic_self__.__class__)
-        )
-        super().__init__(**data)
-
-    def __new__(cls: Type[Self], **kwargs) -> Self:
-        if "class_import_path" in kwargs:
-            subcls = from_qualified_name(kwargs["class_import_path"])
-            return super().__new__(subcls)
-        else:
-            return super().__new__(cls)
 
 
 class PythonCallableDocument(pydantic.BaseModel):
