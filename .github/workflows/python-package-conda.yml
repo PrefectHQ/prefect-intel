@@ -12,9 +12,8 @@ jobs:
       max-parallel: 5
 
     steps:
-      - uses: actions/checkout@v3
-          submodules: true
-
+    - uses: actions/checkout@v3
+        submodules: true
     - name: Set up Python 3.9
       uses: actions/setup-python@v3
       with:
