@@ -7,8 +7,6 @@ on:
       - codeql-coverage-test
 
   pull_request:
-    paths:
-      - .github/workflows/codeql-analysis.yml
     branches:
       - main
 
@@ -27,7 +25,6 @@ jobs:
       fail-fast: false
       matrix:
         language:
-          - javascript
           - python
 
     steps:
