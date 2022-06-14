@@ -4,7 +4,6 @@ channels:
 dependencies:
   - ca-certificates=2022.3.29
   - certifi=2021.10.8
-  - nodejs=16.6
   - openssl=1.1.1n
   - pip=21.2.4
   - python=3.9.12
