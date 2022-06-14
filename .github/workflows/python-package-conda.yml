@@ -17,14 +17,17 @@ jobs:
       uses: actions/setup-python@v3
       with:
         python-version: 3.9
-    - name: List dependencies
-      # conda env update --file environment.yml --name base
 
+    - name: Update conda
+      run: |
+        conda update -n base -c defaults conda
+
+    - name: List dependencies
       run: |
         conda list
+
     - name: Install dependencies
     # conda env update --file environment.yml --name base
-
       run: |
         $CONDA/bin/conda env update --file conda-environment.yaml --name base
       
