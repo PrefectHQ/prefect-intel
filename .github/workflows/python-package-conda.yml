@@ -30,7 +30,7 @@ jobs:
     # conda env update --file environment.yml --name base
 
       run: |
-        conda env update --file conda-environment.yml --name base
+        conda env create --file conda-environment.yml --name base
       
     - name: Lint with flake8
       run: |
