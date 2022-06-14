@@ -12,11 +12,7 @@ def what_day_is_it(date: datetime = None):
 DeploymentSpec(
     flow=what_day_is_it,
     name="flow-deployment",
-    # tags=["dev"],
     flow_runner=SubprocessFlowRunner(env={"MY_VARIABLE": "FOO"}, condaenv="prefect-intel")
-    # schedule=RRuleSchedule(
-    #     rrule="FREQ=MONTHLY;INTERVAL=1;BYDAY=3FR", # 3rd Friday of every month
-    #     timezone="America/New_York"
 )
 
 if __name__ == "__main__":
