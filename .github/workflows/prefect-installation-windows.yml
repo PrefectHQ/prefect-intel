@@ -30,6 +30,7 @@ jobs:
     - name: Update conda
       run: |
         choco install miniconda3
+        refreshenv
         conda update -n base -c defaults conda
     - name: List dependencies
       run: |
