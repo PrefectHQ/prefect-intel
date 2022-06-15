@@ -1,7 +1,11 @@
-import pytest
+from prefect import flow
 from prefect.testing.utilities import prefect_test_harness
 
-from my_flows import my_favorite_flow
+import pytest
+
+@flow
+def my_favorite_flow():
+    return 42
 
 @pytest.fixture(autouse=True, scope="session")
 def prefect_test_fixture():
