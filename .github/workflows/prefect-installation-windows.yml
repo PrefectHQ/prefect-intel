@@ -27,9 +27,10 @@ jobs:
       with:
         python-version: 3.9
 
-    # - name: Update conda
-    #   run: |
-    #     conda update -n base -c defaults conda
+    - name: Update conda
+      run: |
+        choco install miniconda3
+        conda update -n base -c defaults conda
     - name: List dependencies
       run: |
         $CONDA/bin/conda list
