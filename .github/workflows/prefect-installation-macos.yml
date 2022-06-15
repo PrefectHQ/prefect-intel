@@ -1,0 +1,41 @@
+name: Prefect Installation on Linux
+
+on:
+  push:
+    branches:
+      - prefect-install-test
+
+jobs:
+  build-linux:
+    runs-on: macos-latest
+    strategy:
+      max-parallel: 5
+
+    steps:
+
+    - name: Checking out git repo & Prefect submodule
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+    
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v3
+      with:
+        python-version: 3.9
+
+    - name: Update conda
+      run: |
+        conda update -n base -c defaults conda
+
+    - name: List dependencies
+      run: |
+        conda list
+
+    - name: Install dependencies & test Prefect dev installation
+      run: |
+        $CONDA/bin/conda env update --file conda-environment.yaml --name base
+
+    - name: Test with pytest on main branch (ignoring Prefect dev directory)
+      run: |
+        conda install pytest
+        $CONDA/bin/pytest --ignore=./prefect
