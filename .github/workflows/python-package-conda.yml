@@ -12,7 +12,9 @@ jobs:
       max-parallel: 5
 
     steps:
-    - uses: actions/checkout@v3
+
+    - name: Checking out git repo & Prefect submodule
+      uses: actions/checkout@v3
       with:
         submodules: true
     
@@ -29,11 +31,12 @@ jobs:
       run: |
         conda list
 
-    - name: Install dependencies
+    - name: Install dependencies & test Prefect dev installation
       run: |
         $CONDA/bin/conda env update --file conda-environment.yaml --name base
+        prefect which
       
-    - name: Test with pytest
+    - name: Test with pytest on main branch (ignoring Prefect dev directory)
       run: |
         conda install pytest
         $CONDA/bin/pytest --ignore=./prefect
