@@ -1,4 +1,4 @@
-name: Prefect Installation on Linux
+name: Prefect Installation on MacOS
 
 on:
   push:
