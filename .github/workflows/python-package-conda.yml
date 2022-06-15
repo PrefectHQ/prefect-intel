@@ -1,4 +1,4 @@
-name: Prefect Installation
+name: Prefect Installation on Linux
 
 on:
   push:
@@ -34,7 +34,7 @@ jobs:
     - name: Install dependencies & test Prefect dev installation
       run: |
         $CONDA/bin/conda env update --file conda-environment.yaml --name base
-              
+
     - name: Test with pytest on main branch (ignoring Prefect dev directory)
       run: |
         conda install pytest
