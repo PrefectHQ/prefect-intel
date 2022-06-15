@@ -2,8 +2,10 @@ name: Prefect Installation on Windows
 
 on:
   push:
+    paths:
+      - .github/workflows/prefect-installation-windows.yml
     branches:
-      - prefect-install-test
+      - main
 
 jobs:
   build-linux:
@@ -23,12 +25,12 @@ jobs:
       with:
         python-version: 3.9
 
-    - name: Update conda
-      run: |
-        conda update -n base -c defaults conda
+    # - name: Update conda
+    #   run: |
+    #     conda update -n base -c defaults conda
     - name: List dependencies
       run: |
-        conda list
+        $CONDA/bin/conda list
     - name: Install dependencies & test Prefect dev installation
       run: |
         $CONDA/bin/conda env update --file conda-environment.yaml --name base

@@ -2,9 +2,10 @@ name: Prefect Installation on Linux
 
 on:
   push:
+    paths:
+      - .github/workflows/prefect-installation-linux.yml
     branches:
-      - prefect-install-test
-
+      - main
 jobs:
   build-linux:
     runs-on: ubuntu-latest

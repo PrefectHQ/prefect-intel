@@ -2,8 +2,10 @@ name: Prefect Installation on MacOS
 
 on:
   push:
+    paths:
+      - .github/workflows/prefect-installation-macos.yml
     branches:
-      - prefect-install-test
+      - main
 
 jobs:
   build-linux:
