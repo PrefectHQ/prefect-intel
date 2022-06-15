@@ -6,6 +6,8 @@ on:
       - .github/workflows/prefect-installation-linux.yml
     branches:
       - main
+      - prefect-install-test
+      
 jobs:
   build-linux:
     runs-on: ubuntu-latest
