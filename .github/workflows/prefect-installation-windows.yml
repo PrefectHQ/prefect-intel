@@ -37,9 +37,9 @@ jobs:
         #conda update -n base -c defaults conda
         where conda
 
-    - name: List dependencies
+    - name: Testing conda
       run: |
-        ./conda list
+        conda --help
     - name: Install dependencies & test Prefect dev installation
       run: |
         conda env update --file conda-environment.yaml --name base
