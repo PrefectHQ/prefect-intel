@@ -8,42 +8,64 @@ on:
       - main
       - prefect-install-test
 
-
 jobs:
-  build-linux:
-    runs-on: windows-latest
+  build:
+    runs-on: ${{ matrix.os }}
     strategy:
-      max-parallel: 5
-
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        python-version: [3.9]
+    name: Python ${{ matrix.python-version }} example
     steps:
+      - name: Checking out git repo & Prefect submodule
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+      - uses: actions/checkout@v2
+      - name: Setup conda
+        uses: s-weigand/setup-conda@v1
+        with:
+          update-conda: true
+          python-version: ${{ matrix.python-version }}
+          conda-channels: anaconda, conda-forge
+      - run: conda --version
+      - run: which python
 
-    - name: Checking out git repo & Prefect submodule
-      uses: actions/checkout@v3
-      with:
-        submodules: true
+# jobs:
+#   build-linux:
+#     runs-on: windows-latest
+#     strategy:
+#       max-parallel: 5
+
+#     steps:
+
+#     - name: Checking out git repo & Prefect submodule
+#       uses: actions/checkout@v3
+#       with:
+#         submodules: true
     
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v3
-      with:
-        python-version: 3.9
+    # - name: Set up Python 3.9
+    #   uses: actions/setup-python@v3
+    #   with:
+    #     python-version: 3.9
 
-    - name: Install miniconda
-      run: |
-        choco install miniconda3 --params /AddToPath=1
-        refreshenv
+    # - name: Install miniconda
+    #   run: |
+    #     choco install miniconda3 --params /AddToPath=1
+    #     refreshenv
     
-    - name: Update miniconda 
-      run: |
-        #conda update -n base -c defaults conda
-        where conda
+    # - name: Update miniconda 
+    #   run: |
+    #     #conda update -n base -c defaults conda
+    #     where conda
 
-    - name: Testing conda
-      run: |
-        conda --help
-    - name: Install dependencies & test Prefect dev installation
-      run: |
-        conda env update --file conda-environment.yaml --name base
-    - name: Test with pytest on main branch (ignoring Prefect dev directory)
-      run: |
-        conda install pytest
-        pytest --ignore=./prefect
+    # - name: Testing conda
+    #   run: |
+    #     conda --help
+    # - name: Install dependencies & test Prefect dev installation
+    #   run: |
+    #     conda env update --file conda-environment.yaml --name base
+    # - name: Test with pytest on main branch (ignoring Prefect dev directory)
+    #   run: |
+    #     conda install pytest
+    #     pytest --ignore=./prefect
