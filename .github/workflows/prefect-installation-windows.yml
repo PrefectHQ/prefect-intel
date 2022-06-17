@@ -27,12 +27,12 @@ jobs:
       - run: conda --version
       - run: which python
       - name: List dependencies
-      run: |
-        conda list
-
-      # - name: Install dependencies & test Prefect dev installation
-      #   run: |
-      #     $CONDA/bin/conda env update --file conda-environment.yaml --name base
+        run: 
+          |
+          conda list
+    # - name: Install dependencies & test Prefect dev installation
+    #   run: |
+    #     $CONDA/bin/conda env update --file conda-environment.yaml --name base
 
       - name: Test with pytest on main branch (ignoring Prefect dev directory)
         run: |
