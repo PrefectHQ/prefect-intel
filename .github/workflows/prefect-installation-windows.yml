@@ -38,7 +38,7 @@ jobs:
         run: conda update -n base -c defaults conda
 
       - name: Install dependencies & test Prefect dev installation
-        run: conda env update -p --file conda-environment.yaml --name base
+        run: conda env update -p C:\ProgramData\Miniconda3\envs --file conda-environment.yaml --name base
 
       - name: Test with pytest on main branch (ignoring Prefect dev directory)
         run: |
