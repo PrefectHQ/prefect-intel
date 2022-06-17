@@ -17,10 +17,6 @@ jobs:
         python-version: [3.9]
     name: Python ${{ matrix.python-version }} example
     steps:
-      # - name: Checking out git repo & Prefect submodule
-      #   uses: actions/checkout@v3
-      #   with:
-      #     submodules: true
       - uses: actions/checkout@v2
       - name: Setup conda
         uses: s-weigand/setup-conda@v1
@@ -30,19 +26,18 @@ jobs:
           conda-channels: anaconda, conda-forge
       - run: conda --version
       - run: which python
-
       - name: List dependencies
       run: |
         conda list
 
-      - name: Install dependencies & test Prefect dev installation
-        run: |
-          $CONDA/bin/conda env update --file conda-environment.yaml --name base
+      # - name: Install dependencies & test Prefect dev installation
+      #   run: |
+      #     $CONDA/bin/conda env update --file conda-environment.yaml --name base
 
       - name: Test with pytest on main branch (ignoring Prefect dev directory)
         run: |
           conda install pytest
-          $CONDA/bin/pytest --ignore=./prefect
+          pytest --ignore=./prefect
 
 # jobs:
 #   build-linux:
