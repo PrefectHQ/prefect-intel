@@ -15,4 +15,4 @@ dependencies:
   - xz=5.2.5
   - zlib=1.2.12
   - pip:
-    - -e ./prefect/
+    - -e ./prefect/ --user
