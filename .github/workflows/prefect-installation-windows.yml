@@ -23,10 +23,6 @@ jobs:
           submodules: true
       - name: Setup conda
         uses: s-weigand/setup-conda@v1
-        with:
-          update-conda: true
-          python-version: ${{ matrix.python-version }}
-          conda-channels: anaconda, conda-forge
 
       - name: Checking Conda Version
         run: conda --version
