@@ -29,10 +29,10 @@ jobs:
           conda-channels: anaconda, conda-forge
 
       - name: Checking Conda Version
-      - run: conda --version
+        run: conda --version
 
       - name: Checking Python Version
-      - run: which python
+        run: which python
 
       - name: List dependencies
         run: conda list
