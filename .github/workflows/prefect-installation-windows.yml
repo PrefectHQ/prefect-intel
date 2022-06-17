@@ -17,10 +17,10 @@ jobs:
         python-version: [3.9]
     name: Python ${{ matrix.python-version }} example
     steps:
-      - name: Checking out git repo & Prefect submodule
-        uses: actions/checkout@v3
-        with:
-          submodules: true
+      # - name: Checking out git repo & Prefect submodule
+      #   uses: actions/checkout@v3
+      #   with:
+      #     submodules: true
       - uses: actions/checkout@v2
       - name: Setup conda
         uses: s-weigand/setup-conda@v1
