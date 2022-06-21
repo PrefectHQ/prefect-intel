@@ -54,7 +54,7 @@ jobs:
       #   run: anaconda/envs/test_env/bin/pip install -e ./prefect/
 
       - name: testing pip 
-        run: pip install --upgrade pip --user
+        run: python -m pip install --upgrade pip --user
       #   run: anaconda/envs/test_env/bin/pip install -e ./prefect/
 
       - name: Install dependencies & test Prefect dev installation
