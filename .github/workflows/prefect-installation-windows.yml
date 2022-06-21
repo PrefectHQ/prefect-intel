@@ -57,6 +57,9 @@ jobs:
         run: python -m pip install --upgrade pip --user
       #   run: anaconda/envs/test_env/bin/pip install -e ./prefect/
 
+      - name: pip downloading prefect dev directory 
+        run: pip install -e ./prefect/ --user
+        
       - name: Install dependencies & test Prefect dev installation
         run: conda env update --file conda-environment.yaml --name base
 
