@@ -9,7 +9,7 @@ on:
       - prefect-install-test
 
 jobs:
-  build-linux:
+  build-MacOS:
     runs-on: macos-latest
     strategy:
       max-parallel: 5
