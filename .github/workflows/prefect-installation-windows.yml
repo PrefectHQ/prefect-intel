@@ -46,6 +46,9 @@ jobs:
       - name: activate virtual environment 
         run: conda activate test_env
 
+      - name: downloading pip 
+        run: conda install pip
+
       - name: testing get-command 
         run: get-command -Noun pip
       # - name: testing pip 
