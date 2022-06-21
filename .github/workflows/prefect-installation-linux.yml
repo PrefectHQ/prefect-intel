@@ -1,4 +1,4 @@
-name: Prefect Installation on Linux
+name: Testing Prefect Install
 
 on:
   push:
@@ -47,7 +47,6 @@ jobs:
         $CONDA/bin/pytest --ignore=./prefect
 
   
-  
   build-MacOS:
     runs-on: macos-latest
 
@@ -84,4 +83,39 @@ jobs:
       run: |
         conda install pytest
         $CONDA/bin/pytest --ignore=./prefect
+
+
+  build-windows:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest]
+        python-version: [3.9]
+        max-parallel: [5]
+    name: Python ${{ matrix.os }} example
+    steps:
+      - name: Checking out git repo & Prefect submodule
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Setup conda
+        uses: s-weigand/setup-conda@v1
+
+      - name: Update conda
+        run: conda update -n base -c defaults conda
+
+      - name: downloading pip 
+        run: conda install pip
+
+      - name: pip downloading prefect dev directory 
+        run: pip install -e ./prefect/ --user
+
+      - name: Install dependencies & test Prefect dev installation
+        run: conda env update --file conda-environment.yaml --name base
+
+      - name: Test with pytest on main branch (ignoring Prefect dev directory)
+        run: |
+          conda install pytest
+          pytest --ignore=./prefect
 
