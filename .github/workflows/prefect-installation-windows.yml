@@ -38,9 +38,6 @@ jobs:
       - name: Update conda
         run: conda update -n base -c defaults conda
 
-      - name: Install Prefect
-        run: pip install prefect
-
       - name: Install dependencies & test Prefect dev installation
         run: conda env update --file conda-environment.yaml --name base
       
