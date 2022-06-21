@@ -25,27 +25,19 @@ jobs:
       - name: Setup conda
         uses: s-weigand/setup-conda@v1
 
-      - name: Checking Conda Version
-        run: conda --version
-
-      - name: Checking Python Version
-        run: which python
-
-      - name: List dependencies
-        run: conda list
-
       - name: Update conda
         run: conda update -n base -c defaults conda
 
-      - name: Checking Conda Updated Version
-        run: conda --version
+      # - name: create virtual environment 
+      #   run: conda create -n test_env 
 
-      - name: create virtual environment 
-        run: conda create -n test_env 
+      # - name: activate virtual environment 
+      #   run: conda activate test_env
 
-      - name: activate virtual environment 
-        run: conda activate test_env
 
+      - name: activate env
+        run: conda activate base
+        
       - name: downloading pip 
         run: conda install pip
 
@@ -60,7 +52,7 @@ jobs:
       #   run: anaconda/envs/test_env/bin/pip install -e ./prefect/
 
       - name: Install dependencies & test Prefect dev installation
-        run: conda env update --file conda-environment.yaml --name test_env
+        run: conda env update --file conda-environment.yaml --name base
 
       - name: Test with pytest on main branch (ignoring Prefect dev directory)
         run: |
