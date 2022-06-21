@@ -31,7 +31,7 @@ jobs:
         run: conda install pip
 
       - name: (Linux/MacOS) pip downloading prefect dev directory
-        if: ${{ matrix.os == 'ubuntu-latest' }} || ${{ matrix.os == 'macOS-latest' }}
+        if: ${{ matrix.os != 'windows-latest' }}
         run: pip install -e ./prefect/ --user
 
       - name: (Windows) pip downloading prefect dev directory 
