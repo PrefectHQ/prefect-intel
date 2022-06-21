@@ -46,9 +46,10 @@ jobs:
       - name: activate virtual environment 
         run: conda activate test_env
 
-
       - name: testing pip 
-        run: anaconda/envs/test_env/bin/pip install -e ./prefect/
+        run: where pip
+      # - name: testing pip 
+      #   run: anaconda/envs/test_env/bin/pip install -e ./prefect/
 
       - name: Install dependencies & test Prefect dev installation
         run: conda env update --file conda-environment.yaml --name base
