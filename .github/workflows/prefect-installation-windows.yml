@@ -54,12 +54,13 @@ jobs:
       #   run: anaconda/envs/test_env/bin/pip install -e ./prefect/
 
       - name: testing pip 
-        run: where pip
-      # - name: testing pip 
+        run: pip install --upgrade pip --user
       #   run: anaconda/envs/test_env/bin/pip install -e ./prefect/
 
       - name: Install dependencies & test Prefect dev installation
         run: conda env update --file conda-environment.yaml --name base
+
+      
 
       - name: Test with pytest on main branch (ignoring Prefect dev directory)
         run: |
