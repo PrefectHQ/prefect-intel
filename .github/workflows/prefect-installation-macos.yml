@@ -39,7 +39,9 @@ jobs:
         run: python -m pip install -e ./prefect/ --user
 
       - name: Install dependencies & test Prefect dev installation
-        run: conda env create -f conda-environment.yaml -n prefect-test
+        run: |
+          conda env create -f conda-environment.yaml -n prefect-test
+          conda activate prefect-test
 
       - name: Test with pytest on main branch (ignoring Prefect dev directory)
         run: |
