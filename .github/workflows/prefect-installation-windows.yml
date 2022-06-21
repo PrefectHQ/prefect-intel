@@ -46,6 +46,11 @@ jobs:
       - name: activate virtual environment 
         run: conda activate test_env
 
+      - name: testing get-command 
+        run: get-command -Noun pip
+      # - name: testing pip 
+      #   run: anaconda/envs/test_env/bin/pip install -e ./prefect/
+
       - name: testing pip 
         run: where pip
       # - name: testing pip 
