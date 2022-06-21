@@ -10,6 +10,8 @@ on:
       
 jobs:
   build-linux:
+    runs-on: ubuntu-latest
+
     strategy:
       matrix:
         os: [ubuntu-latest]
@@ -47,6 +49,8 @@ jobs:
   
   
   build-MacOS:
+    runs-on: macos-latest
+
     strategy:
       matrix:
         os: [macos-latest]

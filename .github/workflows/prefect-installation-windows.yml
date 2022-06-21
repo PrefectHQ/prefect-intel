@@ -15,7 +15,7 @@ jobs:
       matrix:
         os: [windows-latest]
         python-version: [3.9]
-        max-parallel: 5
+        max-parallel: [5]
     name: Python ${{ matrix.os }} example
     steps:
       - name: Checking out git repo & Prefect submodule
