@@ -1,5 +1,6 @@
 from prefect import flow
 from datetime import datetime
+from prefect.blocks.kubernetes import KubernetesCluster
 from prefect.deployments import DeploymentSpec
 from prefect.flow_runners import KubernetesFlowRunner
 
@@ -12,7 +13,9 @@ def what_day_is_it(date: datetime = None):
 DeploymentSpec(
     flow=what_day_is_it,
     name="flow-deployment",
-    flow_runner=KubernetesFlowRunner(env={"MY_VARIABLE": "FOO"})
+    flow_runner=KubernetesFlowRunner(
+        cluster_config=KubernetesCluster()
+    )
 )
 
 if __name__ == "__main__":
