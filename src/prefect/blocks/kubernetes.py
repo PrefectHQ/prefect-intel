@@ -1,17 +1,18 @@
-from kubernetes import config
-from kubernetes.client import Configuration
+import yaml
 
+from pathlib import Path
 from prefect.blocks.core import Block, register_block
+from typing import Dict, Optional
 
 @register_block
 class KubernetesCluster(Block):
-    config_file: str
     context: str
+    config_file: Optional[str] = f"{Path.home()}/.kube/config"
 
-# nested blocks in order to include client config? 
-    
-#     client_configuration: 
-#     persist_config: bool = False
-
-# @register_block
-# class KubernetesClientConfig(Block):
+    @property
+    def config(self) -> Dict: 
+        with open(self.config_file, 'r') as f:
+            config_contents = yaml.safe_load(f)
+            for cluster_config in config_contents['clusters']:
+                if cluster_config['name'] == self.context:
+                    return cluster_config['cluster']
