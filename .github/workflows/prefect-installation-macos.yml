@@ -1,9 +1,10 @@
 name: Test Prefect test installation
 
 on:
+  pull_request:
   push:
     paths:
-      - .github/workflows/prefect-installation-macos.yml
+      - .github/workflows/prefect-installation-test.yml
     branches:
       - main
       - prefect-install-test
@@ -39,8 +40,6 @@ jobs:
         run: |
           python -m pip install -e ./prefect/ --user
           conda env update -f conda-environment.yaml -n base
-
-
 
       - name: Test with pytest on main branch (ignoring Prefect dev directory)
         run: |
