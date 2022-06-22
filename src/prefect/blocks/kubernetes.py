@@ -7,6 +7,8 @@ from prefect.blocks.core import Block, register_block
 class KubernetesCluster(Block):
     config_file: str
     context: str
+
+# nested blocks in order to include client config?? 
     
 #     client_configuration: 
 #     persist_config: bool = False
