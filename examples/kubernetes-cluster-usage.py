@@ -4,6 +4,8 @@ from prefect.blocks.kubernetes import KubernetesCluster
 from prefect.deployments import DeploymentSpec
 from prefect.flow_runners import KubernetesFlowRunner
 
+from kubernetes import config
+
 @flow
 def what_day_is_it(date: datetime = None):
     if date is None:
@@ -14,7 +16,7 @@ DeploymentSpec(
     flow=what_day_is_it,
     name="flow-deployment",
     flow_runner=KubernetesFlowRunner(
-        cluster_config=KubernetesCluster()
+        cluster_config=KubernetesCluster(context="docker-desktop")
     )
 )
 
