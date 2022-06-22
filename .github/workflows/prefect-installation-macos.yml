@@ -1,4 +1,4 @@
-name: Test Prefect test installation
+name: Prefect Installation Test
 
 on:
   pull_request:
