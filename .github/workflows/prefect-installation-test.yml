@@ -22,6 +22,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: true
+
       - name: Setup conda
         uses: s-weigand/setup-conda@v1
 
@@ -31,11 +32,11 @@ jobs:
       - name: downloading pip 
         run: conda install pip
 
-      - name: (Linux/MacOS) pip downloading prefect dev directory
+      - name: (Linux/MacOS) conda downloading prefect dev directory and dependencies
         if: ${{ matrix.os != 'windows-latest' }}
         run: conda env update -f conda-environment.yaml -n base
 
-      - name: (Windows) pip downloading prefect dev directory 
+      - name: (Windows) pip & conda downloading prefect dev directory and dependencies
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
           python -m pip install -e ./prefect/ --user
