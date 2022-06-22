@@ -40,7 +40,6 @@ jobs:
       - name: (Windows) pip & conda downloading prefect dev directory and dependencies
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
-          python -m pip install -e ./prefect/ --user
           conda env update -f conda-environment.yaml -n base
 
       - name: Test with pytest on main branch (ignoring Prefect dev directory)
