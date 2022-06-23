@@ -19,8 +19,6 @@ def complex_flow_logic():
 
     time.sleep(2)
     if long_sleep.get_state().is_running():
-        # can run custom code here!
-        # including conditionally running other tasks
         print('Long sleep task is still running!')
 
     # blocks until complete and returns state
