@@ -81,11 +81,9 @@ class KubernetesFlowRunner(UniversalFlowRunner):
         
         # if a k8s cluster block is given to or inferred by the flow runner, use that first
         if self.cluster_config:
-            self._k8s.config.load_kube_config(
-                config_file=self.cluster_config.config_file,
+            self._k8s.config.KubeConfigLoader(
+                config_dict=self.cluster_config.config,
                 context=self.cluster_config.context,
-                client_configuration=self.cluster_config.client_configuration,
-                persist_config=self.cluster_config.persist_config
             )
         else:
             # If no block specified, try to load Kubernetes configuration within a cluster. If that doesn't

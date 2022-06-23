@@ -13,6 +13,4 @@ class KubernetesCluster(Block):
     def config(self) -> Dict: 
         with open(self.config_file, 'r') as f:
             config_contents = yaml.safe_load(f)
-            for cluster_config in config_contents['clusters']:
-                if cluster_config['name'] == self.context:
-                    return cluster_config['cluster']
+            return config_contents
