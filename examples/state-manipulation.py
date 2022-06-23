@@ -1,14 +1,12 @@
-import random
-import time
-
+import asyncio, random, platform, time
 from prefect import task, flow
 from prefect.task_runners import DaskTaskRunner
-import asyncio
 
 @task
 def sleep(secs):
     print('Beginning to sleep...')
     time.sleep(secs)
+    # returns a number in range [0.0, 1.0)
     return random.random()
 
 @task
@@ -36,7 +34,6 @@ def complex_flow_logic():
         print('result was good')
 
 if __name__ == "__main__":
-    import platform
     if platform.system()=='Windows':
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     complex_flow_logic()
