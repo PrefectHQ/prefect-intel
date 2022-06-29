@@ -40,7 +40,8 @@ jobs:
       - name: (Windows) Install Prefect
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
-          python -m conda env update -f conda-environment.yaml -n base
+          python -m pip install -e ./prefect/
+          conda env update -f conda-environment.yaml -n base
 
       - name: Run Tests
         run: |
