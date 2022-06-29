@@ -19,31 +19,30 @@ jobs:
         python-version: [3.9]
     name: ${{ matrix.os }} test installation
     steps:
-      - name: Checking out git repo & Prefect submodule
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
         with:
           submodules: true
 
       - name: Setup conda
         uses: s-weigand/setup-conda@v1
 
-      - name: Update conda
-        run: conda update -n base -c defaults conda
+      - name: Install requirements
+        run: |
+          conda update -n base -c defaults conda
+          conda install pip
+          conda install pytest
 
-      - name: downloading pip 
-        run: conda install pip
-
-      - name: (Linux/MacOS) conda downloading prefect dev directory and dependencies
+      - name: (Linux/MacOS) Install Prefect
         if: ${{ matrix.os != 'windows-latest' }}
         run: conda env update -f conda-environment.yaml -n base
 
-      - name: (Windows) pip & conda downloading prefect dev directory and dependencies
+      - name: (Windows) Install Prefect
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
           python -m pip install -e ./prefect/ --user
           conda env update -f conda-environment.yaml -n base
 
-      - name: Test with pytest on main branch (ignoring Prefect dev directory)
+      - name: Run tests
         run: |
           conda install pytest
           pytest --ignore=./prefect
