@@ -26,7 +26,7 @@ jobs:
       - name: Setup conda
         uses: s-weigand/setup-conda@v1
 
-      - name: Install requirements
+      - name: Install Requirements
         run: |
           conda update -n base -c defaults conda
           conda install pip
@@ -42,7 +42,7 @@ jobs:
           python -m pip install -e ./prefect/ --user
           conda env update -f conda-environment.yaml -n base
 
-      - name: Run tests
+      - name: Run Tests
         run: |
           conda install pytest
           pytest --ignore=./prefect
