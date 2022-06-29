@@ -44,6 +44,5 @@ jobs:
 
       - name: Run Tests
         run: |
-          conda install pytest
           pytest --ignore=./prefect
 
