@@ -6,7 +6,6 @@ on:
     paths:
       - .github/workflows/prefect-installation-test.yml
     branches:
-      - main
       - prefect-install-test
 
 jobs:
