@@ -1,7 +1,7 @@
 name: Prefect Installation Test
 
 on:
-  pull_request:
+  #pull_request:
   push:
     paths:
       - .github/workflows/prefect-installation-test.yml
