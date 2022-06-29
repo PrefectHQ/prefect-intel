@@ -1,13 +1,14 @@
 name: Prefect Installation Test
 
 on:
-  #pull_request:
+  pull_request:
   push:
     paths:
       - .github/workflows/prefect-installation-test.yml
     branches:
+      - main
       - prefect-install-test
-
+      
 jobs:
   build:
     runs-on: ${{ matrix.os }}
