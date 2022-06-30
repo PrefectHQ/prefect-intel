@@ -1,0 +1,48 @@
+name: Prefect Installation Test
+
+on:
+  pull_request:
+  push:
+    paths:
+      - .github/workflows/prefect-installation-test.yml
+    branches:
+      - main
+      - prefect-install-test
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      max-parallel: 6
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        python-version: [3.9]
+    name: ${{ matrix.os }} test installation
+    steps:
+
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Setup conda
+        uses: s-weigand/setup-conda@v1
+
+      - name: Install Requirements
+        run: |
+          conda update -n base -c defaults conda
+          conda install pip
+          conda install pytest
+
+      - name: (Linux/MacOS) Install Prefect
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: conda env update -f conda-environment.yaml -n base
+
+      - name: (Windows) Install Prefect
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          python -m pip install -e ./prefect/
+          conda env update -f conda-environment.yaml -n base
+
+      - name: Run Tests
+        run: |
+          pytest --ignore=./prefect
