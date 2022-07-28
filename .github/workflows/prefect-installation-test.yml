@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - .github/workflows/prefect-installation-test.yml
+      - tests/test_flow.py
     branches:
       - main
       - prefect-install-test
