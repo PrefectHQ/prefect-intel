@@ -5,7 +5,6 @@ on:
   push:
     paths:
       - .github/workflows/prefect-installation-test.yml
-      - tests/test_flow.py
     branches:
       - main
       - prefect-install-test
@@ -46,4 +45,6 @@ jobs:
 
       - name: Run Tests
         run: |
-          pytest --ignore=./prefect
+          pytest tests/
+
+
