@@ -45,6 +45,6 @@ jobs:
 
       - name: Run Tests
         run: |
-          pytest tests/
+          pytest tests/test_flow.py
 
 
