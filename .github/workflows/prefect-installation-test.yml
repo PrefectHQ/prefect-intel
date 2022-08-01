@@ -45,4 +45,7 @@ jobs:
 
       - name: Run Tests
         run: |
-          pytest --ignore=./prefect
+          pytest tests/test_flow.py 
+          
+
+

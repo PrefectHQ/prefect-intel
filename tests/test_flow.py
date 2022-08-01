@@ -1,16 +1,13 @@
-from prefect import flow
-from prefect.testing.utilities import prefect_test_harness
+from prefect import flow, task
 
-import pytest
-
-@flow
-def my_favorite_flow():
+@task
+def my_favorite_task():
     return 42
 
-@pytest.fixture(autouse=True, scope="session")
-def prefect_test_fixture():
-    with prefect_test_harness():
-        yield
+@flow(name= "Testing favorite flow")
+def my_favorite_flow():
+    val = my_favorite_task()
+    return val
 
-def test_my_favorite_flow():
-    assert my_favorite_flow().result() == 42
+def test_my_favorite_task():
+    assert my_favorite_task.fn() == 42
